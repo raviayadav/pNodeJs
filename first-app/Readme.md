@@ -1,3 +1,7 @@
+# pNodeJs
+
+### Base code with comments
+```js
 // Dependencies
 const http = require('http');
 // The url library gives us all the methods related to url
@@ -98,3 +102,69 @@ const handlers = {
 const router = {
   'sample': handlers.sample,
 };
+```
+### Setup routing.
+
+* We will route according to the path requested by the user.
+* We must setup a router that can match the incoming path requests to its respective handler.
+* Any requests which doesn't have a match will be routed to the 404 handler.
+
+* We define router with a route -- `sample` and the handler that runs when the route is hit `handlers.sample`. All other routes will be routed to the notFoundHandler which we don't need to write in the router object.
+* The data in the handlers is the data that we have parsed from the request.
+* The callback runs when we are done with handling the requests and tells us two things: a http status code and a payload object.
+* Now we have our router and handler. We now need to modify our http server to send the data and recieves the cb data from that handler and to send the correct response code to the client.
+* So we handle the route from the request on the `end` event which runs for every request.
+* Choose the router handler and construct the data to be sent.
+* Route the request to the handler specified in the router.
+* In the chosenHandler, send in the data and the callback function. The data and the cb will go into the handler function and return to the callback of chosenHandler for further modifications.  
+
+```js
+const http = require('http');
+const url = require('url');
+const StringDecoder = require('string_decoder').StringDecoder;
+const server = http.createServer((req, res) => {
+  const parsedUrl = url.parse(req.url, true);
+  const path = parsedUrl.pathname;
+  const trimmedPathName = path.replace(/^\/+|\/+$/g, '');
+  const queryStringObject = parsedUrl.query;
+  const method = req.method;
+  const headers = req.headers;
+  const decoder = new StringDecoder('utf-8'); // we will get the utf-8 format of payload
+  let buffer = '';
+  req.on('data', (data) => {
+    buffer += decoder.write(data);
+  });
+  req.on('end', () => {
+    buffer += decoder.end(); // end the appending to buffer variable
+    const chosenHandler = typeof(router[trimmedPathName]) !== 'undefined' ? router[trimmedPathName] : handlers.notFound;
+    const data = {
+      trimmedPathName,
+      queryStringObject,
+      headers,
+      payload: buffer,
+      method
+    }; 
+    chosenHandler(data, (statusCode, payload) => {
+      statusCode = typeof(statusCode) === 'number' ? statusCode : 200;
+      console.log('statusCode', statusCode);
+      payload = typeof(payload) === 'object' ? payload : {};
+      const payloadString = JSON.stringify(payload);
+      res.writeHead(statusCode);
+      res.end(payloadString); 
+    });
+  });
+});
+server.listen(3000, () => console.log('listening on port 3000'));
+const handlers = {
+  sample: (data, cb) => {
+    // callback a http status code and a payload
+    cb(406, {'name': 'Sample Handler'});
+  },
+  notFound: (data, cb) => {
+    cb(404);
+  }
+};
+const router = {
+  'sample': handlers.sample,
+};
+```
